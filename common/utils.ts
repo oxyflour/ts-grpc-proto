@@ -1,6 +1,3 @@
-import { Readable, Writable } from 'stream'
-import EventIterator from '../node_modules/event-iterator/src/event-iterator.js'
-
 export function getSrvFuncName(entry: string) {
     const split = ('srv/' + entry).split('/'),
         funcName = split.pop() || '',
@@ -59,25 +56,4 @@ export function wrapFunc<M extends ApiDefinition>(
         }
         return ret
     }
-}
-
-export function makeAsyncIterator(stream: Readable) {
-    let callback: (data: any) => any
-    return new EventIterator(
-        (push, pop, fail) => stream
-            .on('data', callback = data => push(data.result))
-            .on('end', pop)
-            .on('error', fail),
-        (_, pop, fail) => stream
-            .removeListener('data', callback)
-            .removeListener('end', pop)
-            .removeListener('error', fail),
-    )
-}
-
-export async function startAsyncIterator(stream: Writable, iter: AsyncIterableIterator<any>) {
-    for await (const result of iter) {
-        stream.write({ result })
-    }
-    stream.end()
 }

@@ -123,7 +123,7 @@ export function getDefaultExportType(file: string, opts: ts.CompilerOptions) {
                     firstParamType = parameters[0] &&
                         checker.getTypeOfSymbolAtLocation(parameters[0], parameters[0].valueDeclaration) as TypeReferenceType
                 if (parameters.length === 1 && firstParamType && firstParamType.symbol &&
-                        firstParamType.symbol.escapedName === 'AsyncIterableIterator') {
+                        firstParamType.symbol.escapedName === 'AsyncGenerator') {
                     const member = parseExportType(firstParamType.typeArguments[0], next)
                     args.result = { id: 1, member, required: true }
                     requestStream = true
@@ -144,7 +144,7 @@ export function getDefaultExportType(file: string, opts: ts.CompilerOptions) {
                 if (returnType.symbol && returnType.symbol.escapedName === 'Promise' && returnType.typeArguments) {
                     const [ret] = returnType.typeArguments as TypeReferenceType[]
                     return new ExportFunc(argsType, parseExportType(ret, next), { requestStream, responseStream: false })
-                } else if (returnType.symbol && returnType.symbol.escapedName === 'AsyncIterableIterator' && returnType.typeArguments) {
+                } else if (returnType.symbol && returnType.symbol.escapedName === 'AsyncGenerator' && returnType.typeArguments) {
                     let [ret] = returnType.typeArguments as TypeReferenceType[]
                     return new ExportFunc(argsType, parseExportType(ret, next), { requestStream, responseStream: true })
                 } else {

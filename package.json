@@ -4,7 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently \"tsc -p app/tsconfig.json --watch\" \"tsc -p www/tsconfig.json --watch\" \"python -m SimpleHTTPServer\"",
+    "dev:app": "tsc -p app/tsconfig.json --watch",
+    "dev:www": "tsc -p www/tsconfig.json --watch",
+    "dev:serve": "live-server --no-browser --port=12345 --ignore=./dist-www/**,./dist-app/**",
+    "dev:proxy": "grpcwebproxy --allow_all_origins --backend_addr=localhost:5000 --use_websockets --run_tls_server=false",
+    "dev": "concurrently \"npm run dev:app\" \"npm run dev:www\" \"npm run dev:serve\" \"npm run dev:proxy\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -27,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^12.12.14",
-    "concurrently": "^5.0.0"
+    "concurrently": "^5.0.0",
+    "live-server": "^1.2.1"
   }
 }

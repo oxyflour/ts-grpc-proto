@@ -3,8 +3,10 @@ import ts from 'typescript'
 import path from 'path'
 import grpc, { Server, ServerCredentials, loadObject } from 'grpc'
 import { Root } from 'protobufjs'
+import { Readable, Writable } from 'stream'
+import EventIterator from 'event-iterator'
 import { getProtoObject } from './parser'
-import { wrapFunc, AsyncFunction, makeAsyncIterator, startAsyncIterator, getSrvFuncName } from '../common/utils'
+import { wrapFunc, AsyncFunction, getSrvFuncName } from '../common/utils'
 
 function loadTsConfig(file: string) {
     const compilerOptionsJson = fs.readFileSync(file, 'utf8'),
@@ -21,6 +23,27 @@ function loadTsConfig(file: string) {
         throw Error(`parse config in '${file}' failed`)
     }
     return settings.options
+}
+
+function makeAsyncIterator(stream: Readable) {
+    let callback: (data: any) => any
+    return new EventIterator(
+        (push, pop, fail) => stream
+            .on('data', callback = data => push(data.result))
+            .on('end', pop)
+            .on('error', fail),
+        (_, pop, fail) => stream
+            .removeListener('data', callback)
+            .removeListener('end', pop)
+            .removeListener('error', fail),
+    )
+}
+
+async function startAsyncIterator(stream: Writable, iter: AsyncIterableIterator<any>) {
+    for await (const result of iter) {
+        stream.write({ result })
+    }
+    stream.end()
 }
 
 function makeService(entry: string, func: any, proto: any) {

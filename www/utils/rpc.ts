@@ -1,6 +1,7 @@
 import api from '../../common/api.js'
-import { getSrvFuncName, makeAsyncIterator, hookFunc, asyncCache } from '../../common/utils.js'
+import { getSrvFuncName, hookFunc, asyncCache } from '../../common/utils.js'
 import { importScript } from '../utils/loader.js'
+import { EventIterator } from '../../node_modules/event-iterator/src/event-iterator.js'
 
 const TYPE_CODES = {
     bytes: 12,
@@ -44,7 +45,7 @@ const init = asyncCache(async () => {
         }
         return obj
     }
-    async function call(host: string, entry: string, args: any[], proto: any) {
+    function call(host: string, entry: string, args: any[], proto: any) {
         const [srvName, funcName] = getSrvFuncName(entry),
             { requestType, responseType, requestStream, responseStream } = proto.nested[srvName].methods[funcName],
             reqFields = proto.nested[requestType].fields,
@@ -58,7 +59,12 @@ const init = asyncCache(async () => {
             throw Error('request stream not supported')
         } else if (responseStream) {
             const stream = client.serverStreaming(url, request, { }, info)
-            return makeAsyncIterator(stream as any)
+            return new EventIterator((push, pop, fail) => {
+                stream
+                    .on('data', data => push(data.result))
+                    .on('end', pop)
+                    .on('error', err => fail({ name: 'IteratorError', ...err }))
+            })
         } else {
             return new Promise((resolve, reject) => {
                 const callback = (err: any, ret: any) => err ? reject(err) : resolve(ret.result)
