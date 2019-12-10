@@ -7,7 +7,7 @@
     "dev:server": "tsc-watch --onSuccess \"node dist/server/main.js\"",
     "dev:client": "parcel watch index.html",
     "dev:static": "live-server dist --no-browser --port=12345 --ignore=src",
-    "dev:proxy": "grpcwebproxy --allow_all_origins --backend_addr=localhost:5000 --use_websockets --run_tls_server=false",
+    "dev:proxy": "grpcwebproxy --allow_all_origins --backend_addr=localhost:5000 --server_tls_key_file=../keys/yff.me/privkey.pem --server_tls_cert_file=../keys/yff.me/fullchain.pem",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:static\" \"npm run dev:proxy\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

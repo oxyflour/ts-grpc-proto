@@ -5,7 +5,7 @@ import buildRPC from './rpc'
 
 import 'babel-polyfill'
 
-const rpc = buildRPC('http://localhost:8080')
+const rpc = buildRPC('https://dev.yff.me:8443')
 function App() {
     const pkg = useAsyncEffect(async () => {
         console.log(await rpc.a.it())
