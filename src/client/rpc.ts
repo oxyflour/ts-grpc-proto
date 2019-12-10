@@ -5,53 +5,88 @@ import { EventIterator } from 'event-iterator'
 import api from '../common/api'
 import { getSrvFuncName, hookFunc, asyncCache, metaQuery, metaProto } from '../common/utils'
 
-const TYPE_CODES = {
-    bytes: 12,
-    string: 9,
-    number: 2,
-    boolean: 8,
-    void: -1,
-    undefined: -1,
-    null: -1,
-} as { [k: string]: number }
-
-const client = new GrpcWebClientBase({ })
-function serializeBinary(fields: { [k: string]: any }, args: any) {
-    const writer = new BinaryWriter()
+function serializeBinary({ fields, nested }: any, args: any, writer = new BinaryWriter()) {
     for (const [name, field] of Object.entries(fields)) {
-        const code = TYPE_CODES[field.type]
-        if (code > 0) {
-            writer.writeAny(code, field.id, args[name])
+        const { id, type, rule } = field as any,
+            repeated = rule === 'repeated',
+            val = args[name]
+        switch (type) {
+            case 'bytes':
+                repeated ? writer.writeRepeatedBytes(id, val) : writer.writeBytes(id, val)
+                break
+            case 'string':
+                repeated ? writer.writeRepeatedString(id, val) : writer.writeString(id, val)
+                break
+            case 'float':
+                repeated ? writer.writeRepeatedFloat(id, val) : writer.writeFloat(id, val)
+                break
+            case 'bool':
+                repeated ? writer.writeRepeatedBool(id, val) : writer.writeBool(id, val)
+                break
+            default:
+                const sub = nested[type]
+                if (sub) {
+                    const cb = (val: any, writer: BinaryWriter) => serializeBinary(sub, val, writer)
+                    repeated ? writer.writeRepeatedMessage(id, val, cb) : writer.writeMessage(id, val, cb)
+                } else {
+                    throw Error(`type ${type} not supported`)
+                }
         }
     }
     return writer.getResultBuffer()
 }
-function deserializeBinary(fields: { [k: string]: any }, bytes: Uint8Array) {
-    const reader = new BinaryReader(bytes),
-        obj = { } as any
+
+function deserializeBinary({ fields, nested }: any, bytes: Uint8Array, out = { } as any, reader = new BinaryReader(bytes)) {
     while (reader.nextField()) {
         if (reader.isEndGroup()) {
             break
         }
         const id = reader.getFieldNumber(),
             name = Object.keys(fields).find((name: string) => fields[name].id === id) || '',
-            code = TYPE_CODES[fields[name].type]
-        if (code > 0) {
-            obj[name] = reader.readAny(code)
+            { type, rule } = fields[name],
+            repeated = rule === 'repeated'
+        if (repeated) {
+            out[name] = out[name] || []
+        }
+        switch (type) {
+            case 'bytes':
+                repeated ? out[name].push(reader.readBytes()) : (out[name] = reader.readBytes())
+                break
+            case 'string':
+                repeated ? out[name].push(reader.readString()) : (out[name] = reader.readString())
+                break
+            case 'float':
+                out[name] = repeated ? reader.readPackedFloat() : reader.readFloat()
+                break
+            case 'bool':
+                out[name] = repeated ? reader.readPackedBool() : reader.readBool()
+                break
+            default:
+                const sub = nested[type]
+                if (sub) {
+                    const val = { }
+                    reader.readMessage(val, (val, reader) => deserializeBinary(sub, bytes, val, reader))
+                    repeated ? out[name].push(val) : (out[name] = val)
+                } else {
+                    throw Error(`unknown type ${type}`)
+                }
         }
     }
-    return obj
+    return out
 }
+
+const client = new GrpcWebClientBase({ }),
+    cache = { } as { [key: string]: AbstractClientBase.MethodInfo<any, any> }
 function call(host: string, entry: string, args: any[], proto: any) {
     const [srvName, funcName] = getSrvFuncName(entry),
         { requestType, responseType, requestStream, responseStream } = proto.nested[srvName].methods[funcName],
-        reqFields = proto.nested[requestType].fields,
-        resFields = proto.nested[responseType].fields,
-        request = Object.keys(reqFields).reduce((all, key, idx) => ({ ...all, [key]: args[idx] }), { }),
+        reqType = proto.nested[requestType],
+        resType = proto.nested[responseType],
+        request = Object.keys(reqType.fields).reduce((all, key, idx) => ({ ...all, [key]: args[idx] }), { }),
         url = `${host}/${srvName}/${funcName}`,
-        info = new AbstractClientBase.MethodInfo(Object,
-            req => serializeBinary(reqFields, req),
-            bytes => deserializeBinary(resFields, bytes))
+        info = cache[url] || (cache[url] = new AbstractClientBase.MethodInfo(Object,
+            req => serializeBinary(reqType, req),
+            bytes => deserializeBinary(resType, bytes)))
     if (requestStream) {
         throw Error('request stream not supported')
     } else if (responseStream) {

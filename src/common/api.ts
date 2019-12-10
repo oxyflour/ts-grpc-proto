@@ -8,12 +8,16 @@ export default {
         }
     },
     async it3() {
-        return {
-            a: 'maybe ok'
-        }
+        return [{
+            a: 'maybe ok',
+            b: [0, 1, 2],
+            c: [true, false],
+            d: ['a', 'b', 'c'],
+            e: [Buffer.from('A'), Buffer.from('B')]
+        }]
     },
     async *st() {
-        for (const i in Array(10).fill(0)) {
+        for (const i in Array(5).fill(0)) {
             yield i
             await new Promise(resolve => setTimeout(resolve, 500))
         }

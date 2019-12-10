@@ -8,9 +8,11 @@ function App() {
     const pkg = useAsyncEffect(async () => {
         console.log(await rpc.a.it())
         console.log(await rpc.a.it2())
+        /*
         for await (const i of rpc.st()) {
             console.log(i)
         }
+        */
         return await rpc.it3()
     }, [])
     return <div>
