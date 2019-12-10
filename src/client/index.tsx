@@ -1,18 +1,35 @@
-import React from 'react'
+import React, { useReducer, useEffect } from 'react'
 import ReactDOM from 'react-dom'
-import { useAsyncEffect } from './effect'
+import { useAsyncEffect, buildRedux } from './effect'
 import buildRPC from './rpc'
 
 const rpc = buildRPC('https://dev.yff.me:8443')
+
+const builder = buildRedux({ log: [] as string[] }),
+    Reset = builder.action(() => ({ }), state => ({ ...state, log: [] })),
+    Append = builder.action((line: string) => ({ line }), (state, action) => ({ ...state, log: state.log.concat(action.line) }))
+function Logger() {
+    const [state, dispatch] = useReducer(builder.reducer, builder.init)
+    useEffect(() => {
+        dispatch(Reset())
+        const st = rpc.st()
+        async function run() {
+            for await (const i of st) {
+                dispatch(Append(i))
+            }
+        }
+        run()
+        return () => void st.return()
+    }, [])
+    return <div>
+        { state.log.map((line, index) => <div key={ index }>{ line }</div>) }
+    </div>
+}
+
 function App() {
     const pkg = useAsyncEffect(async () => {
         console.log(await rpc.a.it())
         console.log(await rpc.a.it2())
-        /*
-        for await (const i of rpc.st()) {
-            console.log(i)
-        }
-        */
         return await rpc.it3()
     }, [])
     return <div>
@@ -26,6 +43,7 @@ function App() {
                 { JSON.stringify(pkg.value, null, 2) }
             </pre>
         }
+        <Logger />
     </div>
 }
 
