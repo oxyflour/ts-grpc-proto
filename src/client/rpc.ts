@@ -97,7 +97,10 @@ function makeCall(host: string, entry: string, args: any[]) {
         }
         return await proxy.next()
     }
-    return { then, [Symbol.asyncIterator]: () => ({ next }) }
+    const ret = (val?: any) => {
+        return proxy.return && proxy.return(val)
+    }
+    return { then, [Symbol.asyncIterator]: () => ({ next }), result: ret }
 }
 
 export default (host: string) => hookFunc({ } as typeof api, (...stack) => {
