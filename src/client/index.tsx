@@ -1,6 +1,9 @@
-import { React, ReactDOM } from 'https://unpkg.com/es-react'
-import { useAsyncEffect } from './utils/effect.js'
-import buildRPC from './utils/rpc.js'
+import React from 'react'
+import ReactDOM from 'react-dom'
+import { useAsyncEffect } from './effect'
+import buildRPC from './rpc'
+
+import 'babel-polyfill'
 
 const rpc = buildRPC('http://localhost:8080')
 function App() {

@@ -1,8 +1,21 @@
+export const metaQuery = {
+    srv: '_q',
+    fun: '_p',
+}
+
+export const metaProto = {
+    nested: {
+        ['srv_' + metaQuery.srv]: { methods: { [metaQuery.fun]: { requestType: 'req', responseType: 'res' } } },
+        req: { fields: { entry:  { id: 1, rule: 'required', type: 'string' } } },
+        res: { fields: { result: { id: 1, rule: 'required', type: 'string' } } }
+    }
+}
+
 export function getSrvFuncName(entry: string) {
     const split = ('srv/' + entry).split('/'),
-        funcName = split.pop() || '',
-        srvName = split.join('/').replace(/\W/g, '_')
-    return [srvName, funcName]
+        fun = split.pop() || '',
+        srv = split.join('/').replace(/\W/g, '_')
+    return [srv, fun]
 }
 
 export function sleep(delay: number) {

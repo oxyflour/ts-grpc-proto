@@ -6,7 +6,7 @@ import { Root } from 'protobufjs'
 import { Readable, Writable } from 'stream'
 import EventIterator from 'event-iterator'
 import { getProtoObject } from './parser'
-import { wrapFunc, AsyncFunction, getSrvFuncName } from '../common/utils'
+import { wrapFunc, AsyncFunction, getSrvFuncName, metaQuery, metaProto } from '../common/utils'
 
 function loadTsConfig(file: string) {
     const compilerOptionsJson = fs.readFileSync(file, 'utf8'),
@@ -89,7 +89,7 @@ function makeService(entry: string, func: any, proto: any) {
     return { srvName, funcName, wrapper }
 }
 
-function makeServerImpl(proto: any, api: any) {
+function register(server: Server, proto: any, api: any) {
     const root = Root.fromJSON(proto),
         desc = loadObject(root) as any,
         impl = { } as any
@@ -101,33 +101,27 @@ function makeServerImpl(proto: any, api: any) {
             srv = impl[srvName] || (impl[srvName] = { })
         srv[funcName] = wrapper
     })
-    return { desc, impl }
-}
-
-const meta = {
-    proto: require(path.join(__dirname, '..', '..', 'proto.json')),
-    service: '_query_proto',
-}
-
-async function serve(file: string, opt: string, addr='0.0.0.0:5000') {
-    const config = loadTsConfig(opt)
-    require('ts-node').register(config)
-    const api = require(file).default,
-        proto = getProtoObject(file, api, config),
-        { desc, impl } = makeServerImpl(proto, api),
-        server = new Server()
     for (const name in impl) {
         server.addService(desc[name].service, impl[name])
     }
-    const metaFunc = async (entry: string) => JSON.stringify(proto),
-        metaSrv = makeServerImpl(meta.proto, { query_proto: { [meta.service]: metaFunc } })
-    server.addService(metaSrv.desc.srv_query_proto.service, metaSrv.impl.srv_query_proto)
-    server.bind(addr, ServerCredentials.createInsecure())
-    server.start()
+    return server
 }
 
-const dir = path.join(__dirname, '..', '..')
+async function serve(file: string, opt: string, addr: string) {
+    const config = loadTsConfig(opt)
+    require('ts-node').register(config)
+    const server = new Server(),
+        api = require(file).default,
+        proto = getProtoObject(file, api, config)
+    register(server, proto, api)
+    register(server, metaProto, { [metaQuery.srv]: { [metaQuery.fun]: async () => JSON.stringify(proto) } })
+    server.bind(addr, ServerCredentials.createInsecure())
+    server.start()
+    console.log(`serving ${file} at ${addr}`)
+}
+
 serve(
-    path.join(dir, 'common', 'api'),
-    path.join(dir, 'app', 'tsconfig.json'))
+    path.join(__dirname, '..', '..', 'src', 'common', 'api'),
+    path.join(__dirname, '..', '..', 'tsconfig.json'),
+    '0.0.0.0:5000')
 

@@ -46,7 +46,7 @@ export function getDefaultExportType(file: string, opts: ts.CompilerOptions) {
     const program = ts.createProgram([file], opts),
         checker = program.getTypeChecker(),
         resolvedPath = require.resolve(file, { paths: [process.cwd()] }),
-        sourceFile = resolvedPath && program.getSourceFile(resolvedPath as any),
+        sourceFile = resolvedPath && program.getSourceFile(resolvedPath),
         moduleSymbol = sourceFile && checker.getSymbolAtLocation(sourceFile),
         defaultExport = moduleSymbol &&
             checker.tryGetMemberInModuleExports(ts.InternalSymbolName.Default, moduleSymbol),
