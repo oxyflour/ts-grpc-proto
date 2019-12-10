@@ -17,7 +17,7 @@ export default {
         }]
     },
     async *st() {
-        for (const i in Array(5).fill(0)) {
+        for (const i in Array(20).fill(0)) {
             yield i
             await new Promise(resolve => setTimeout(resolve, 500))
         }

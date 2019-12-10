@@ -1,5 +1,6 @@
 import React, { useReducer, useEffect } from 'react'
 import ReactDOM from 'react-dom'
+import { HashRouter, Route, Switch, Link } from 'react-router-dom'
 import { useAsyncEffect, buildRedux } from './effect'
 import buildRPC from './rpc'
 
@@ -43,8 +44,17 @@ function App() {
                 { JSON.stringify(pkg.value, null, 2) }
             </pre>
         }
-        <Logger />
     </div>
 }
 
-ReactDOM.render(<App />, document.getElementById('main'))
+ReactDOM.render(<HashRouter>
+    <div><Link to="/0">0</Link> <Link to="/1">1</Link></div>
+    <Switch>
+        <Route path="/0">
+            <App />
+        </Route>
+        <Route path="/1">
+            <Logger />
+        </Route>
+    </Switch>
+</HashRouter>, document.getElementById('main'))
