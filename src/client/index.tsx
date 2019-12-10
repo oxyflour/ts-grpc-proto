@@ -3,8 +3,6 @@ import ReactDOM from 'react-dom'
 import { useAsyncEffect } from './effect'
 import buildRPC from './rpc'
 
-import 'babel-polyfill'
-
 const rpc = buildRPC('https://dev.yff.me:8443')
 function App() {
     const pkg = useAsyncEffect(async () => {

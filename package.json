@@ -14,11 +14,14 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "# use async await": "https://github.com/parcel-bundler/parcel/issues/954#issuecomment-481021395",
+  "browserslist": [
+    "last 1 Chrome version"
+  ],
   "dependencies": {
     "@types/google-protobuf": "^3.7.2",
     "@types/react": "^16.9.15",
     "@types/react-dom": "^16.9.4",
-    "babel-polyfill": "^6.26.0",
     "event-iterator": "^1.2.0",
     "google-protobuf": "^3.11.1",
     "grpc": "^1.24.2",

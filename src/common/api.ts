@@ -8,7 +8,9 @@ export default {
         }
     },
     async it3() {
-        return 'maybe ok'
+        return {
+            a: 'maybe ok'
+        }
     },
     async *st() {
         for (const i in Array(10).fill(0)) {
