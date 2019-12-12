@@ -14,7 +14,7 @@ function serializeBinary({ fields, nested }: any, args: any, writer: BinaryWrite
             if (keyType !== 'string') {
                 throw Error(`key type ${keyType} not supported`)
             }
-            for (const [k, v] of Object.values(val) as [string, any][]) {
+            for (const [k, v] of Object.entries(val)) {
                 writer.beginSubMessage(id)
                 const fields = { k: { id: 1, type: 'string' }, v: { id: 2, type } }
                 serializeBinary({ fields, nested }, { k, v }, writer)
