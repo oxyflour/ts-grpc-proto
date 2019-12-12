@@ -5,11 +5,23 @@ import { EventIterator } from 'event-iterator'
 import api from '../common/api'
 import { getSrvFuncName, hookFunc, asyncCache, metaQuery, metaProto } from '../common/utils'
 
-function serializeBinary({ fields, nested }: any, args: any, writer = new BinaryWriter()) {
+function serializeBinary({ fields, nested }: any, args: any, writer: BinaryWriter) {
     for (const [name, field] of Object.entries(fields)) {
-        const { id, type, rule } = field as any,
+        const { id, type, rule, keyType } = field as any,
             repeated = rule === 'repeated',
             val = args[name]
+        if (keyType) {
+            if (keyType !== 'string') {
+                throw Error(`key type ${keyType} not supported`)
+            }
+            for (const [k, v] of Object.values(val) as [string, any][]) {
+                writer.beginSubMessage(id)
+                const fields = { k: { id: 1, type: 'string' }, v: { id: 2, type } }
+                serializeBinary({ fields, nested }, { k, v }, writer)
+                writer.endSubMessage(id)
+            }
+            break
+        }
         switch (type) {
             case 'bytes':
                 repeated ? writer.writeRepeatedBytes(id, val) : writer.writeBytes(id, val)
@@ -33,19 +45,30 @@ function serializeBinary({ fields, nested }: any, args: any, writer = new Binary
                 }
         }
     }
-    return writer.getResultBuffer()
+    return writer
 }
 
-function deserializeBinary({ fields, nested }: any, bytes: Uint8Array, out = { } as any, reader = new BinaryReader(bytes)) {
+function deserializeBinary({ fields, nested }: any, reader: BinaryReader, out = { } as any) {
     while (reader.nextField()) {
         if (reader.isEndGroup()) {
             break
         }
         const id = reader.getFieldNumber(),
             name = Object.keys(fields).find((name: string) => fields[name].id === id) || '',
-            { type, rule } = fields[name],
+            { type, rule, keyType } = fields[name],
             repeated = rule === 'repeated'
-        if (repeated) {
+        if (keyType) {
+            out[name] = out[name] || { }
+            if (keyType !== 'string') {
+                throw Error(`key type ${keyType} not supported`)
+            }
+            reader.readMessage(out[name], (map, reader) => {
+                const fields = { k: { id: 1, type: 'string' }, v: { id: 2, type } },
+                    out = deserializeBinary({ fields, nested }, reader)
+                map[out.k] = out.v
+            })
+            continue
+        } else if (repeated) {
             out[name] = out[name] || []
         }
         switch (type) {
@@ -65,7 +88,7 @@ function deserializeBinary({ fields, nested }: any, bytes: Uint8Array, out = { }
                 const sub = nested[type]
                 if (sub) {
                     const val = { }
-                    reader.readMessage(val, (val, reader) => deserializeBinary(sub, bytes, val, reader))
+                    reader.readMessage(val, (val, reader) => deserializeBinary(sub, reader, val))
                     repeated ? out[name].push(val) : (out[name] = val)
                 } else {
                     throw Error(`unknown type ${type}`)
@@ -85,8 +108,8 @@ function call(host: string, entry: string, args: any[], proto: any) {
         request = Object.keys(reqType.fields).reduce((all, key, idx) => ({ ...all, [key]: args[idx] }), { }),
         url = `${host}/${srvName}/${funcName}`,
         info = cache[url] || (cache[url] = new AbstractClientBase.MethodInfo(Object,
-            req => serializeBinary(reqType, req),
-            bytes => deserializeBinary(resType, bytes)))
+            req => serializeBinary(reqType, req, new BinaryWriter()).getResultBuffer(),
+            bytes => deserializeBinary(resType, new BinaryReader(bytes))))
     if (requestStream) {
         throw Error('request stream not supported')
     } else if (responseStream) {

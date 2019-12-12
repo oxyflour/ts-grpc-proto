@@ -28,11 +28,7 @@ function Logger() {
 }
 
 function App() {
-    const pkg = useAsyncEffect(async () => {
-        console.log(await rpc.a.it())
-        console.log(await rpc.a.it2())
-        return await rpc.it3()
-    }, [])
+    const pkg = useAsyncEffect(() => rpc.workflow.list({ a: 'b', c: 'd' }), [])
     return <div>
         Main
         {

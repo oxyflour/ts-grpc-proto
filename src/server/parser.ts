@@ -56,6 +56,10 @@ export function getDefaultExportType(file: string, opts: ts.CompilerOptions) {
         throw Error(`no default export found for file "${file}"`)
     }
 
+    function formatTypes(types: ts.Type[]) {
+        return types.map(type => checker.typeToString(type)).join('\nin ')
+    }
+
     function parseExportType(type: ts.Type, stack: ts.Type[]): ExportType {
         const next = [type].concat(stack),
             intrinsic = type as IntrinsicType,
@@ -67,27 +71,35 @@ export function getDefaultExportType(file: string, opts: ts.CompilerOptions) {
             if (intrinsic.intrinsicName !== 'unknown') {
                 return intrinsic.intrinsicName
             } else {
-                throw Error(`unknown type ${next.map(type => checker.typeToString(type)).join('\nin ')}`)
+                throw Error(`unknown type ${formatTypes(next)}`)
+            }
+        } else if ((type.flags & ts.TypeFlags.Object) && type.symbol && type.symbol.escapedName === 'Buffer') {
+            return 'buffer'
+        } else if (type.flags & ts.TypeFlags.Union) {
+            const { types } = type as ts.UnionType,
+                nonNulls = types.filter(type => !(type.flags & ts.TypeFlags.Undefined))
+            if (nonNulls.length == 1) {
+                return parseExportType(nonNulls[0], next)
+            } else {
+                throw Error(`only union types with undefined supported, type ${formatTypes(next)}`)
             }
         } else if (symbol && symbol.escapedName === 'Array' && reference.typeArguments) {
             if (reference.typeArguments.length === 1) {
                 const [argument] = reference.typeArguments
                 return new ExportArray(parseExportType(argument, next))
             } else {
-                throw Error(`array of types ${reference.typeArguments} not supported, type ${next.map(type => checker.typeToString(type)).join('\nin ')}`)
+                throw Error(`array of types ${reference.typeArguments} not supported, type ${formatTypes(next)}`)
             }
         } else if ((type.flags & ts.TypeFlags.Object) && stringIndexed) {
             const valType = parseExportType(stringIndexed, next)
-            if (valType instanceof ExportMap) {
-                throw Error(`nested maps are not supported, type ${next.map(type => checker.typeToString(type)).join('\nin ')}`)
+            if (valType instanceof ExportMap || valType instanceof ExportArray) {
+                throw Error(`nested maps are not supported, type ${formatTypes(next)}`)
             }
             return new ExportMap('string', valType)
-        } else if ((type.flags & ts.TypeFlags.Object) && type.symbol && type.symbol.escapedName === 'Buffer') {
-            return 'buffer'
         } else if ((type.flags & ts.TypeFlags.Object) && numberIndexed) {
             const valType = parseExportType(numberIndexed, next)
-            if (valType instanceof ExportMap) {
-                throw Error(`nested maps are not supported, type ${next.map(type => checker.typeToString(type)).join('\nin ')}`)
+            if (valType instanceof ExportMap || valType instanceof ExportArray) {
+                throw Error(`nested maps are not supported, type ${formatTypes(next)}`)
             }
             return new ExportMap('number', valType)
         } else if ((type.flags & ts.TypeFlags.Object) &&
@@ -148,13 +160,13 @@ export function getDefaultExportType(file: string, opts: ts.CompilerOptions) {
                     let [ret] = returnType.typeArguments as TypeReferenceType[]
                     return new ExportFunc(argsType, parseExportType(ret, next), { requestStream, responseStream: true })
                 } else {
-                    throw Error(`return value is not an async function or iterator, type ${next.map(type => checker.typeToString(type)).join('\nin ')}`)
+                    throw Error(`return value is not an async function or iterator, type ${formatTypes(next)}`)
                 }
             } else {
-                throw Error(`can not parse function type ${next.map(type => checker.typeToString(type)).join('\nin ')}`)
+                throw Error(`can not parse function type ${formatTypes(next)}`)
             }
         } else {
-            throw Error(`can not parse type ${next.map(type => checker.typeToString(type)).join('\nin ')}`)
+            throw Error(`can not parse type ${formatTypes(next)}`)
         }
     }
 
