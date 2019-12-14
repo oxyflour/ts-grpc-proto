@@ -4,10 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev:server": "tsc-watch --onSuccess \"node dist/server/main.js\"",
+    "dev:server": "tsc-watch -b src/server/tsconfig.json --onSuccess \"node dist/server/main.js\"",
     "dev:client": "parcel watch index.html",
     "dev:static": "live-server dist --no-browser --port=12345 --ignore=src",
-    "dev:proxy": "grpcwebproxy --allow_all_origins --backend_addr=localhost:5000 --server_tls_key_file=../keys/yff.me/privkey.pem --server_tls_cert_file=../keys/yff.me/fullchain.pem",
+    "dev:proxy": "grpcwebproxy --allow_all_origins --backend_addr=localhost:5000 --server_tls_key_file=../keys/yff.me/privkey.pem --server_tls_cert_file=../keys/yff.me/fullchain.pem > nul",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:static\" \"npm run dev:proxy\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -28,6 +28,8 @@
     "google-protobuf": "^3.11.1",
     "grpc": "^1.24.2",
     "grpc-web": "^1.0.7",
+    "less": "^3.10.3",
+    "office-ui-fabric-react": "^7.73.0",
     "parcel": "^1.12.4",
     "protobufjs": "^6.8.8",
     "react": "^16.12.0",

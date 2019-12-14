@@ -6,6 +6,7 @@ export function useAsyncEffect<V>(fn: () => Promise<V>, val?: DependencyList) {
         [error, setError] = useState()
     async function run() {
         setLoading(true)
+        setError(null)
         try {
             setValue(await fn())
         } catch (err) {
@@ -33,4 +34,20 @@ export function buildRedux<S>(init: S) {
             return (map[action.type] || id)(state, action)
         }
     }
+}
+
+export function withMouseDown(evt: MouseEvent,
+    onMove: (evt: MouseEvent, init: { clientX: number, clientY: number }) => void,
+    onUp?: (evt: MouseEvent) => void) {
+    const { clientX, clientY } = evt
+    function onMouseMove(evt: MouseEvent) {
+        onMove(evt, { clientX, clientY })
+    }
+    function onMouseUp(evt: MouseEvent) {
+        window.removeEventListener('mousemove', onMouseMove)
+        window.removeEventListener('mouseup', onMouseUp)
+        onUp && onUp(evt)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
 }

@@ -22,9 +22,10 @@ export interface Template {
 export interface FlowNode {
     displayName: string
     startedAt: string
-    finishedAt: string
+    finishedAt?: string
     name: string
     phase: string
+    type: string
 }
 
 export interface Workflow {
@@ -39,26 +40,18 @@ export interface Workflow {
         templates: Template[]
     }
     status: {
+        startedAt: string
         finishedAt: string
         nodes: { [name: string]: FlowNode }
     }
 }
 
-export interface WorkflowResponse {
-    body: {
-        items: Workflow[]
-    }
-}
-
 export default {
     workflow: {
-        async list(a: { [k: string]: string }) {
-            console.log(a)
-            /*
-            const { body } = await api.listNamespacedCustomObject(group, version, namespace, plural) as WorkflowResponse
-            console.log(JSON.stringify(body.items, null, 2))
-            */
-            return { a: 'c', b: 'd' } as { [k: string]: string }
+        async list() {
+            const { body } = await api.listNamespacedCustomObject(
+                group, version, namespace, plural) as { body: { items: Workflow[] } }
+            return body.items
         }
     },
     async *st() {

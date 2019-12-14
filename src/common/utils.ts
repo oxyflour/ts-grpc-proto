@@ -11,6 +11,10 @@ export const metaProto = {
     }
 }
 
+export function clamp(x: number, min: number, max: number) {
+    return x < min ? min : x > max ? max : x
+}
+
 export function getSrvFuncName(entry: string) {
     const split = ('srv/' + entry).split('/'),
         fun = split.pop() || '',
@@ -20,6 +24,19 @@ export function getSrvFuncName(entry: string) {
 
 export function sleep(delay: number) {
     return new Promise(resolve => setTimeout(resolve, delay))
+}
+
+export function debounce<F extends Function>(fn: F, delay: number) {
+    let timeout = null as any
+    return ((...args: any[]) => {
+        if (timeout) {
+            clearTimeout(timeout)
+        }
+        timeout = setTimeout(() => {
+            fn(...args)
+            timeout = 0
+        }, delay)
+    }) as any as F
 }
 
 export function asyncCache<R, F extends (...args: any[]) => Promise<R>>(fn: F) {

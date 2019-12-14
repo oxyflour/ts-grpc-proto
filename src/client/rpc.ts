@@ -20,7 +20,7 @@ function serializeBinary({ fields, nested }: any, args: any, writer: BinaryWrite
                 serializeBinary({ fields, nested }, { k, v }, writer)
                 writer.endSubMessage(id)
             }
-            break
+            continue
         }
         switch (type) {
             case 'bytes':
@@ -49,6 +49,7 @@ function serializeBinary({ fields, nested }: any, args: any, writer: BinaryWrite
 }
 
 function deserializeBinary({ fields, nested }: any, reader: BinaryReader, out = { } as any) {
+    const getArr = (name: string) => out[name] as any[] || (out[name] = [])
     while (reader.nextField()) {
         if (reader.isEndGroup()) {
             break
@@ -68,15 +69,13 @@ function deserializeBinary({ fields, nested }: any, reader: BinaryReader, out = 
                 map[out.k] = out.v
             })
             continue
-        } else if (repeated) {
-            out[name] = out[name] || []
         }
         switch (type) {
             case 'bytes':
-                repeated ? out[name].push(reader.readBytes()) : (out[name] = reader.readBytes())
+                repeated ? getArr(name).push(reader.readBytes()) : (out[name] = reader.readBytes())
                 break
             case 'string':
-                repeated ? out[name].push(reader.readString()) : (out[name] = reader.readString())
+                repeated ? getArr(name).push(reader.readString()) : (out[name] = reader.readString())
                 break
             case 'float':
                 out[name] = repeated ? reader.readPackedFloat() : reader.readFloat()
@@ -89,7 +88,7 @@ function deserializeBinary({ fields, nested }: any, reader: BinaryReader, out = 
                 if (sub) {
                     const val = { }
                     reader.readMessage(val, (val, reader) => deserializeBinary(sub, reader, val))
-                    repeated ? out[name].push(val) : (out[name] = val)
+                    repeated ? getArr(name).push(val) : (out[name] = val)
                 } else {
                     throw Error(`unknown type ${type}`)
                 }
