@@ -6,10 +6,10 @@ import { useId } from '@uifabric/react-hooks'
 
 import buildRPC from './rpc'
 import { useAsyncEffect, buildRedux, withMouseDown } from './effect'
-import { sleep, debounce } from '../common/utils'
+import { debounce } from '../common/utils'
 
 import './index.less'
-import { Span, calcSpanList, drawSpanList, timelineSpanHeight, TIME, drawBackground, timelineHead } from './utils/canvas'
+import { calcSpanList as clacRows, drawSpanList, TIME, TimelineRow } from './utils/canvas'
 
 const rpc = buildRPC('https://dev.yff.me:8443')
 
@@ -35,22 +35,23 @@ function Logger() {
     </div>
 }
 
-function Timeline({ spanList }: { spanList: Span[][] }) {
+function Timeline({ rows }: { rows: TimelineRow[] }) {
     const id = useId('flow')
     return <div>
     {
-        spanList.flat().map(({ left, top, width, height, name, node }, index) => <TooltipHost key={ index }
-            content={
-                <>
-                    <b>Name</b>: { name }<br />
-                    <b>Phase</b>: { node.phase }
-                </>
-            }
-            calloutProps={{ target: `#${id}-${index}` }}>
-            <div id={ `${id}-${index}` } className="flow-span" style={{
-                left, top, width: width, height: height
-            }}></div>
-        </TooltipHost>)
+        rows.map(item => item.spans).flat()
+            .map(({ left, top, width, height, name, node }, index) => <TooltipHost key={ index }
+                content={
+                    <>
+                        <b>Name</b>: { name }<br />
+                        <b>Phase</b>: { node.phase }
+                    </>
+                }
+                calloutProps={{ target: `#${id}-${index}` }}>
+                <div id={ `${id}-${index}` } className="flow-span" style={{
+                    left, top, width: width, height: height
+                }}></div>
+            </TooltipHost>)
     }
     </div>
 }
@@ -67,35 +68,24 @@ function Main() {
         w2t = 1 / t2w,
         range = { start, end, width, height, t2w, w2t }
 
-    const workflows = useAsyncEffect(async () => {
-        while (1) {
-            try {
-                return await rpc.workflow.list()
-            } catch (err) {
-                console.error(err)
-                await sleep(1000)
-            }
-        }
-        return []
-    }, [])
-
-    const [spanList, setSpanList] = useState([] as Span[][]),
-        setSpanListDebounced = debounce(setSpanList, 1000)
+    const workflows = useAsyncEffect(rpc.workflow.list, []),
+        pods = useAsyncEffect(rpc.pod.list, []),
+        [rows, setRows] = useState([] as TimelineRow[]),
+        setRowsDebounced = debounce(setRows, 1000)
 
     useEffect(() => {
         const cv = cvRef.current,
             dc = cv && cv.getContext('2d'),
-            spanList = calcSpanList(range, workflows.value || [])
+            rows = clacRows(range, pods.value || [], workflows.value || [])
         if (cv && dc) {
             if (!(cv as any).dpiScaled) {
                 (cv as any).dpiScaled = dpi
                 dc.scale(dpi, dpi)
             }
-            drawBackground(dc, range)
-            drawSpanList(dc, spanList)
+            drawSpanList(dc, range, rows)
         }
-        setSpanListDebounced(spanList)
-    }, [start, end, !!workflows.value])
+        setRowsDebounced(rows)
+    }, [start, end, workflows.value, pods.value])
 
     function onWheel(evt: React.WheelEvent) {
         const cv = cvRef.current
@@ -129,7 +119,7 @@ function Main() {
                     <div>error: { workflows.error.message }</div> :
                     null
             }
-            <Timeline spanList={ spanList } />
+            <Timeline rows={ rows } />
         </div>
         <canvas className="timeline-bg" style={{ width, height }}
             width={ width * dpi } height={ height * dpi } ref={ cvRef } />

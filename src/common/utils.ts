@@ -11,8 +11,20 @@ export const metaProto = {
     }
 }
 
+export function randint(from: number, to = 0) {
+    return Math.floor(Math.random() * (to - from) + from)
+}
+
 export function clamp(x: number, min: number, max: number) {
     return x < min ? min : x > max ? max : x
+}
+
+export function memo<F extends Function>(fn: F) {
+    const cache = { } as { [s: string]: any }
+    return ((...args: any[]) => {
+        const key = args.join('|||')
+        return cache[key] || (cache[key] = fn(...args))
+    }) as any as F
 }
 
 export function getSrvFuncName(entry: string) {

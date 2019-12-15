@@ -1,13 +1,37 @@
-import { KubeConfig, CustomObjectsApi } from '@kubernetes/client-node'
+import { KubeConfig, CustomObjectsApi, CoreV1Api } from '@kubernetes/client-node'
 
 const config = new KubeConfig()
 config.loadFromDefault()
-const api = config.makeApiClient(CustomObjectsApi)
+
+const crd = config.makeApiClient(CustomObjectsApi),
+    core = config.makeApiClient(CoreV1Api)
 
 const group = 'argoproj.io',
     version = 'v1alpha1',
     namespace = 'default',
     plural = 'workflows'
+
+export interface Pod {
+    metadata: {
+        name: string
+    }
+    spec: {
+        nodeName?: string
+    }
+}
+
+export interface WorkerNode {
+    metadata: {
+        name: string
+    }
+    spec: {
+        unschedulable: boolean
+    }
+    status?: {
+        address: string
+        status: string
+    }
+}
 
 export interface Template {
     name: string
@@ -47,9 +71,21 @@ export interface Workflow {
 }
 
 export default {
+    node: {
+        async list() {
+            const { body } = await core.listNode() as { body: { items: WorkerNode[] } }
+            return body.items
+        }
+    },
+    pod: {
+        async list() {
+            const { body } = await core.listNamespacedPod(namespace) as { body: { items: Pod[] } }
+            return body.items
+        }
+    },
     workflow: {
         async list() {
-            const { body } = await api.listNamespacedCustomObject(
+            const { body } = await crd.listNamespacedCustomObject(
                 group, version, namespace, plural) as { body: { items: Workflow[] } }
             return body.items
         }

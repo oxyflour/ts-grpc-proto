@@ -1,5 +1,5 @@
-import { FlowNode, Workflow } from '../../common/api'
-import { startTimeOfDay } from '../../common/utils'
+import { FlowNode, Workflow, Pod } from '../../common/api'
+import { startTimeOfDay, randint, memo } from '../../common/utils'
 
 export interface TimeRange {
     start: number
@@ -22,6 +22,11 @@ export interface Span {
     node: FlowNode
 }
 
+export interface TimelineRow {
+    spans: Span[]
+    worker: string
+}
+
 export const timelineHead = 20,
     timelineSpanHeight = 20
 
@@ -42,37 +47,44 @@ export const GRIDS = [
     [TIME.day,         TIME.hour * 4],
 ]
 
-const colorCache = [ ] as string[]
-function getColorFromCache(index: number) {
-    return colorCache[index] || (colorCache[index] = `hsl(${Math.floor(Math.random() * 360)}, 76%, 69%)`)
-}
+const getFlowColor = memo((_: number) => `hsl(${randint(360)}, 76%, 69%)`),
+    getWorkerColor = memo((_: string) => `hsl(${randint(360)}, 100%, 95%)`)
 
-export function calcSpanList(range: TimeRange, flows: Workflow[]) {
-    const spanList = [ ] as Span[][]
+export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[]) {
+    const workers = { } as { [name: string]: string }
+    for (const pod of pods) {
+        workers[pod.metadata.name] = pod.spec.nodeName || ''
+    }
+
+    const rows = [ ] as TimelineRow[]
     for (const [index, flow] of flows.entries()) {
         for (const [name, node] of Object.entries(flow.status.nodes)) {
             if (node.type === 'Pod' && node.startedAt) {
-                const start = new Date(node.startedAt).getTime(),
+                const worker = workers[node.name] || '',
+                    start = new Date(node.startedAt).getTime(),
                     end = node.finishedAt ? new Date(node.finishedAt).getTime() : range.end,
-                    spans = spanList.find(spans => spans.every(span => span.end < start || span.start > end)),
-                    selected = spans || (spanList.push([]), spanList[spanList.length - 1]),
+                    spans = rows.find(item => item.worker === worker &&
+                        item.spans.every(span => span.end < start || span.start > end)),
                     left = (start - range.start) * range.t2w,
                     width = Math.max((end - start) * range.t2w, 10)
                 if (left < range.width && left + width > 0) {
-                    selected.push({ start, end, left, width, name, index, node, top: 0, height: 0 })
+                    const selected = spans || (rows.push({ spans: [], worker }), rows[rows.length - 1])
+                    selected.spans.push({ start, end, left, width, name, index, node, top: 0, height: 0 })
                 }
             }
         }
     }
+
     let spanStartHeight = timelineHead
-    for (const spans of spanList) {
+    const sorted = rows.sort((a, b) => a.worker.localeCompare(b.worker))
+    for (const { spans } of sorted) {
         for (const span of spans) {
             span.top = spanStartHeight
             span.height = timelineSpanHeight
         }
         spanStartHeight += timelineSpanHeight
     }
-    return spanList
+    return rows
 }
 
 function drawVerticalGrids(dc: CanvasRenderingContext2D, positions: number[][], style: string) {
@@ -89,9 +101,8 @@ function drawVerticalGrids(dc: CanvasRenderingContext2D, positions: number[][], 
 
 export function drawBackground(dc: CanvasRenderingContext2D, { start, end, t2w, width, height }: TimeRange) {
     const now = Date.now()
-    dc.clearRect(0, 0, width, height)
     dc.save()
-    dc.fillStyle = '#eee'
+    dc.fillStyle = 'rgba(240, 240, 240, 0.5)'
     dc.fillRect((now - start) * t2w, 0, (end - Math.min(now, start)) * t2w, height)
     dc.restore()
 
@@ -120,11 +131,26 @@ export function drawBackground(dc: CanvasRenderingContext2D, { start, end, t2w, 
     }
 }
 
-export function drawSpanList(dc: CanvasRenderingContext2D, spanList: Span[][]) {
+export function drawSpanList(dc: CanvasRenderingContext2D, range: TimeRange, rows: TimelineRow[]) {
+    dc.clearRect(0, 0, range.width, range.height)
     dc.save()
-    for (const spans of spanList) {
+    let prev = 'null'
+    for (const { spans: [first], worker } of rows) {
+        if (first) {
+            dc.fillStyle = getWorkerColor(worker)
+            dc.fillRect(0, first.top, range.width, first.height)
+        }
+        if (prev !== worker && first) {
+            dc.fillStyle = '#888'
+            dc.fillText((prev = worker) || '<null>', 5, first.top + first.height - 5)
+        }
+    }
+    dc.restore()
+    drawBackground(dc, range)
+    dc.save()
+    for (const { spans } of rows) {
         for (const span of spans) {
-            dc.fillStyle = getColorFromCache(span.index)
+            dc.fillStyle = getFlowColor(span.index)
             dc.fillRect(span.left + 1, span.top + 1, span.width - 2, span.height - 2)
         }
     }
