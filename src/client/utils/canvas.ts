@@ -1,0 +1,132 @@
+import { FlowNode, Workflow } from '../../common/api'
+import { startTimeOfDay } from '../../common/utils'
+
+export interface TimeRange {
+    start: number
+    end: number
+    width: number
+    height: number
+    t2w: number
+    w2t: number
+}
+
+export interface Span {
+    start: number
+    end: number
+    left: number
+    width: number
+    top: number
+    height: number
+    name: string
+    index: number
+    node: FlowNode
+}
+
+export const timelineHead = 20,
+    timelineSpanHeight = 20
+
+export const TIME = {
+    minute: 60 * 1000,
+    hour: 3600 * 1000,
+    day: 3600 * 1000 * 24,
+    week: 7 * 3600 * 1000 * 24,
+}
+
+export const GRIDS = [
+    [TIME.minute * 10, TIME.minute * 2],
+    [TIME.minute * 30, TIME.minute * 5],
+    [TIME.hour,        TIME.minute * 10],
+    [TIME.hour * 2,    TIME.minute * 30],
+    [TIME.hour * 6,    TIME.hour],
+    [TIME.hour * 12,   TIME.hour * 2],
+    [TIME.day,         TIME.hour * 4],
+]
+
+const colorCache = [ ] as string[]
+function getColorFromCache(index: number) {
+    return colorCache[index] || (colorCache[index] = `hsl(${Math.floor(Math.random() * 360)}, 76%, 69%)`)
+}
+
+export function calcSpanList(range: TimeRange, flows: Workflow[]) {
+    const spanList = [ ] as Span[][]
+    for (const [index, flow] of flows.entries()) {
+        for (const [name, node] of Object.entries(flow.status.nodes)) {
+            if (node.type === 'Pod' && node.startedAt) {
+                const start = new Date(node.startedAt).getTime(),
+                    end = node.finishedAt ? new Date(node.finishedAt).getTime() : range.end,
+                    spans = spanList.find(spans => spans.every(span => span.end < start || span.start > end)),
+                    selected = spans || (spanList.push([]), spanList[spanList.length - 1]),
+                    left = (start - range.start) * range.t2w,
+                    width = Math.max((end - start) * range.t2w, 10)
+                if (left < range.width && left + width > 0) {
+                    selected.push({ start, end, left, width, name, index, node, top: 0, height: 0 })
+                }
+            }
+        }
+    }
+    let spanStartHeight = timelineHead
+    for (const spans of spanList) {
+        for (const span of spans) {
+            span.top = spanStartHeight
+            span.height = timelineSpanHeight
+        }
+        spanStartHeight += timelineSpanHeight
+    }
+    return spanList
+}
+
+function drawVerticalGrids(dc: CanvasRenderingContext2D, positions: number[][], style: string) {
+    dc.save()
+    dc.beginPath()
+    for (const [pos, from, to] of positions) {
+        dc.moveTo(pos, from)
+        dc.lineTo(pos, to)
+    }
+    dc.strokeStyle = style
+    dc.stroke()
+    dc.restore()
+}
+
+export function drawBackground(dc: CanvasRenderingContext2D, { start, end, t2w, width, height }: TimeRange) {
+    const now = Date.now()
+    dc.clearRect(0, 0, width, height)
+    dc.save()
+    dc.fillStyle = '#eee'
+    dc.fillRect((now - start) * t2w, 0, (end - Math.min(now, start)) * t2w, height)
+    dc.restore()
+
+    // background
+    const begin = startTimeOfDay(start),
+        [timeSpan, subTimeSpan] = GRIDS.find(([span]) => span * t2w > 200) || GRIDS[GRIDS.length - 1]
+    const subTickPos = [ ] as number[][]
+    for (let time = begin; time < end; time += subTimeSpan) {
+        subTickPos.push([(time - start) * t2w, timelineHead, height])
+    }
+    drawVerticalGrids(dc, subTickPos, '#ddd')
+    const tickPos = [ ] as number[][]
+    for (let time = begin; time < end; time += timeSpan) {
+        tickPos.push([(time - start) * t2w, 0, height])
+    }
+    drawVerticalGrids(dc, tickPos, '#666')
+
+    // labels
+    for (let time = begin; time < end; time += timeSpan) {
+        const pos = (time - start) * t2w,
+            date = new Date(time),
+            timeString = [date.getHours(), date.getMinutes()]
+                .map(val => `${val}`.padStart(2, '0')).join(':'),
+            text = timeString === '00:00' ? date.toDateString() + ' ' + timeString : timeString
+        dc.fillText(text, pos + 5, timelineHead - 5, timeSpan * t2w - 10)
+    }
+}
+
+export function drawSpanList(dc: CanvasRenderingContext2D, spanList: Span[][]) {
+    dc.save()
+    for (const spans of spanList) {
+        for (const span of spans) {
+            dc.fillStyle = getColorFromCache(span.index)
+            dc.fillRect(span.left + 1, span.top + 1, span.width - 2, span.height - 2)
+        }
+    }
+    dc.restore()
+}

@@ -6,10 +6,10 @@ import { useId } from '@uifabric/react-hooks'
 
 import buildRPC from './rpc'
 import { useAsyncEffect, buildRedux, withMouseDown } from './effect'
-import { Workflow, FlowNode } from '../common/api'
 import { sleep, debounce } from '../common/utils'
 
 import './index.less'
+import { Span, calcSpanList, drawSpanList, timelineSpanHeight, TIME, drawBackground, timelineHead } from './utils/canvas'
 
 const rpc = buildRPC('https://dev.yff.me:8443')
 
@@ -35,163 +35,31 @@ function Logger() {
     </div>
 }
 
-interface TimeRange {
-    start: number
-    end: number
-    width: number
-    height: number
-    t2w: number
-    w2t: number
-}
-
-function dayStartOf(time: number) {
-    const date = new Date(time)
-    date.setHours(0, 0, 0, 0)
-    return date.getTime()
-}
-
-const ONE_MINITE = 60 * 1000,
-    ONE_HOUR = 60 * ONE_MINITE,
-    ONE_DAY = ONE_HOUR * 24,
-    ONE_WEEK = ONE_DAY * 7
-
-const durations = [
-    [10 * ONE_MINITE, 2 * ONE_MINITE],
-    [30 * ONE_MINITE, 5 * ONE_MINITE],
-    [ONE_HOUR, 10 * ONE_MINITE],
-    [2 * ONE_HOUR, 30 * ONE_MINITE],
-    [6 * ONE_HOUR, ONE_HOUR],
-    [12 * ONE_HOUR, 2 * ONE_HOUR],
-    [ONE_DAY, 4 * ONE_HOUR],
-]
-
-const timelineHead = 20,
-    timelineTop = 40,
-    timelineSpanHeight = 20
-
-function drawVerticalGrids(dc: CanvasRenderingContext2D, positions: number[][], style: string) {
-    dc.save()
-    dc.beginPath()
-    for (const [pos, from, to] of positions) {
-        dc.moveTo(pos, from)
-        dc.lineTo(pos, to)
-    }
-    dc.strokeStyle = style
-    dc.stroke()
-    dc.restore()
-}
-
-function drawBackground(dc: CanvasRenderingContext2D, { start, end, t2w, width, height }: TimeRange) {
-    const now = Date.now()
-    dc.clearRect(0, 0, width, height)
-    dc.save()
-    dc.fillStyle = '#eee'
-    dc.fillRect((now - start) * t2w, 0, (end - start) * t2w, height)
-    dc.restore()
-
-    // background
-    const begin = dayStartOf(start),
-        [timeSpan, subTimeSpan] = durations.find(([span]) => span * t2w > 200) || durations[durations.length - 1]
-    const subTickPos = [ ] as number[][]
-    for (let time = begin; time < end; time += subTimeSpan) {
-        subTickPos.push([(time - start) * t2w, timelineHead, height])
-    }
-    drawVerticalGrids(dc, subTickPos, '#ddd')
-    const tickPos = [ ] as number[][]
-    for (let time = begin; time < end; time += timeSpan) {
-        tickPos.push([(time - start) * t2w, 0, height])
-    }
-    drawVerticalGrids(dc, tickPos, '#666')
-
-    // labels
-    for (let time = begin; time < end; time += timeSpan) {
-        const pos = (time - start) * t2w,
-            date = new Date(time),
-            timeString = [date.getHours(), date.getMinutes()]
-                .map(val => `${val}`.padStart(2, '0')).join(':'),
-            text = timeString === '00:00' ? date.toDateString() + ' ' + timeString : timeString
-        dc.fillText(text, pos + 5, timelineHead - 5, timeSpan * t2w - 10)
-    }
-}
-
-const colorCache = [ ] as string[]
-function getColorFromCache(index: number) {
-    return colorCache[index] || (colorCache[index] = `hsl(${Math.floor(Math.random() * 360)}, 76%, 69%)`)
-}
-
-export interface Span {
-    start: number
-    end: number
-    left: number
-    width: number
-    name: string
-    index: number
-    node: FlowNode
-}
-
-function calcSpanList(range: TimeRange, flows: Workflow[]) {
-    const spanList = [ ] as Span[][]
-    for (const [index, flow] of flows.entries()) {
-        for (const [name, node] of Object.entries(flow.status.nodes)) {
-            if (node.type === 'Pod' && node.startedAt) {
-                const start = new Date(node.startedAt).getTime(),
-                    end = node.finishedAt ? new Date(node.finishedAt).getTime() : range.end,
-                    spans = spanList.find(spans => spans.every(span => span.end < start || span.start > end)),
-                    selected = spans || (spanList.push([]), spanList[spanList.length - 1]),
-                    left = (start - range.start) * range.t2w,
-                    width = Math.max((end - start) * range.t2w, 10)
-                selected.push({ start, end, left, width, name, index, node })
-            }
-        }
-    }
-    return spanList
-}
-
-function drawFlows(dc: CanvasRenderingContext2D, range: TimeRange, flows: Workflow[]) {
-    dc.save()
-    let spanStartHeight = timelineHead
-    for (const spans of calcSpanList(range, flows)) {
-        for (const span of spans) {
-            dc.fillStyle = getColorFromCache(span.index)
-            dc.fillRect(span.left, spanStartHeight + 1, span.width, timelineSpanHeight - 2)
-        }
-        spanStartHeight += timelineSpanHeight
-    }
-    dc.restore()
-}
-
-function Flows({ range, flows }: { range: TimeRange, flows: Workflow[] }) {
-    const spanList = calcSpanList(range, flows),
-        id = useId('flow')
+function Timeline({ spanList }: { spanList: Span[][] }) {
+    const id = useId('flow')
     return <div>
     {
-        spanList.map((spans, index1) => <div key={ index1 } style={{ height: timelineSpanHeight }}>
-        {
-            spans.map((span, index) => <TooltipHost key={ index }
-                content={
-                    <p>
-                        <b>Name</b>: { span.name }<br />
-                        <b>Phase</b>: { span.node.phase }
-                    </p>
-                }
-                calloutProps={{ target: `#${id}-${index1}-${index}` }}>
-                <div id={ `${id}-${index1}-${index}` } className="flow-span" style={{
-                    left: span.left - 1,
-                    width: span.width,
-                    height: timelineSpanHeight - 2,
-                }}></div>
-            </TooltipHost>)
-        }
-        </div>)
+        spanList.flat().map(({ left, top, width, height, name, node }, index) => <TooltipHost key={ index }
+            content={
+                <>
+                    <b>Name</b>: { name }<br />
+                    <b>Phase</b>: { node.phase }
+                </>
+            }
+            calloutProps={{ target: `#${id}-${index}` }}>
+            <div id={ `${id}-${index}` } className="flow-span" style={{
+                left, top, width: width, height: height
+            }}></div>
+        </TooltipHost>)
     }
     </div>
 }
 
-function Timeline() {
+function Main() {
     const now = Date.now(),
-        [[start, end], setRange] = useState([now - ONE_WEEK, now + ONE_DAY]),
-        [showType, setShowType] = useState('flow'),
+        [[start, end], setRange] = useState([now - TIME.week, now + TIME.day]),
         cvRef = useRef<HTMLCanvasElement>(null),
+        timelineTop = 40,
         width = window.innerWidth,
         height = window.innerHeight - timelineTop,
         dpi = window.devicePixelRatio,
@@ -200,7 +68,7 @@ function Timeline() {
         range = { start, end, width, height, t2w, w2t }
 
     const workflows = useAsyncEffect(async () => {
-        while (showType === 'flow') {
+        while (1) {
             try {
                 return await rpc.workflow.list()
             } catch (err) {
@@ -209,26 +77,24 @@ function Timeline() {
             }
         }
         return []
-    }, [showType])
+    }, [])
 
-    const [flowProps, setFlowProps] = useState({ flows: [] as Workflow[], range }),
-        setFlowsDebounced = debounce(setFlowProps, 500)
+    const [spanList, setSpanList] = useState([] as Span[][]),
+        setSpanListDebounced = debounce(setSpanList, 1000)
 
     useEffect(() => {
         const cv = cvRef.current,
             dc = cv && cv.getContext('2d'),
-            flows = workflows.value || []
+            spanList = calcSpanList(range, workflows.value || [])
         if (cv && dc) {
             if (!(cv as any).dpiScaled) {
                 (cv as any).dpiScaled = dpi
                 dc.scale(dpi, dpi)
             }
             drawBackground(dc, range)
-            if (showType === 'flow') {
-                drawFlows(dc, range, flows)
-            }
+            drawSpanList(dc, spanList)
         }
-        setFlowsDebounced({ flows, range })
+        setSpanListDebounced(spanList)
     }, [start, end, !!workflows.value])
 
     function onWheel(evt: React.WheelEvent) {
@@ -239,7 +105,7 @@ function Timeline() {
                 f1 = (evt.clientX - left) / width,
                 f2 = (right - evt.clientX) / width,
                 val = end - start + delta
-            if (val > 30 * ONE_MINITE && val < ONE_WEEK) {
+            if (val > 30 * TIME.minute && val < TIME.week) {
                 setRange([start - delta * f1, end + delta * f2])
             }
         }
@@ -251,14 +117,10 @@ function Timeline() {
     })
 
     return <>
-        <div style={{ height: timelineTop }}>
-            <select value={ showType } onChange={ evt => setShowType(evt.target.value) }>
-                <option value="flow">Show Flow</option>
-                <option value="node">Show Node</option>
-            </select>
+        <div style={{ height: timelineTop, lineHeight: `${timelineTop}px` }}>
+            uvw
         </div>
-        <div className="timeline-main"
-                style={{ width, height, marginTop: timelineHead, marginBottom: -timelineHead }}
+        <div className="timeline-main" style={{ width, height }}
             onMouseDown={ onMouseDown } onWheel={ onWheel }>
             {
                 workflows.loading ?
@@ -267,7 +129,7 @@ function Timeline() {
                     <div>error: { workflows.error.message }</div> :
                     null
             }
-            <Flows flows={ flowProps.flows } range={ flowProps.range } />
+            <Timeline spanList={ spanList } />
         </div>
         <canvas className="timeline-bg" style={{ width, height }}
             width={ width * dpi } height={ height * dpi } ref={ cvRef } />
@@ -276,8 +138,8 @@ function Timeline() {
 
 ReactDOM.render(<HashRouter>
     <Switch>
-        <Route path="/0">
-            <Timeline />
+        <Route path="/">
+            <Main />
         </Route>
         <Route path="/1">
             <Logger />

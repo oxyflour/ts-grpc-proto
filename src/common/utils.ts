@@ -22,6 +22,12 @@ export function getSrvFuncName(entry: string) {
     return [srv, fun]
 }
 
+export function startTimeOfDay(time: number) {
+    const date = new Date(time)
+    date.setHours(0, 0, 0, 0)
+    return date.getTime()
+}
+
 export function sleep(delay: number) {
     return new Promise(resolve => setTimeout(resolve, delay))
 }
