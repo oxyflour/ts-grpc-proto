@@ -59,17 +59,18 @@ export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[], f
         workers[pod.metadata.name] = pod.spec.nodeName || ''
     }
 
-    const rows = [ ] as TimelineRow[]
+    const rows = [ ] as TimelineRow[],
+        now = Date.now()
     for (const [index, flow] of flows.entries()) {
         for (const [name, node] of Object.entries(flow.status.nodes)) {
             if (node.type === 'Pod' && node.startedAt) {
                 const worker = workers[node.id] || '',
                     start = new Date(node.startedAt).getTime(),
-                    end = node.finishedAt ? new Date(node.finishedAt).getTime() : range.end,
-                    spans = rows.find(item => item.worker === worker &&
-                        item.spans.every(span => span.end < start || span.start > end)),
+                    end = node.finishedAt ? new Date(node.finishedAt).getTime() : now + 20 * range.w2t,
                     left = (start - range.start) * range.t2w,
-                    width = Math.max((end - start) * range.t2w, 10)
+                    width = Math.max((end - start) * range.t2w, 10),
+                    spans = rows.find(item => item.worker === worker &&
+                        item.spans.every(span => span.end < start || span.start > start + width * range.w2t))
                 if (left < range.width && left + width > 0) {
                     const selected = spans || (rows.push({ spans: [], worker }), rows[rows.length - 1])
                     selected.spans.push({ start, end, left, width, name, index, node, top: 0, height: 0 })
@@ -108,8 +109,20 @@ function drawVerticalGrids(dc: CanvasRenderingContext2D, positions: number[][], 
     dc.restore()
 }
 
-export function drawBackground(dc: CanvasRenderingContext2D, { start, end, t2w, height }: TimeRange) {
-    // background
+function drawLabels(dc: CanvasRenderingContext2D, { start, end, t2w, height }: TimeRange) {
+    const begin = startTimeOfDay(start),
+        [timeSpan] = GRIDS.find(([span]) => span * t2w > 200) || GRIDS[GRIDS.length - 1]
+    for (let time = begin; time < end; time += timeSpan) {
+        const pos = (time - start) * t2w,
+            date = new Date(time),
+            timeString = [date.getHours(), date.getMinutes()]
+                .map(val => `${val}`.padStart(2, '0')).join(':'),
+            text = timeString === '00:00' ? date.toDateString() + ' ' + timeString : timeString
+        dc.fillText(text, pos + 5, timelineHead - 5, timeSpan * t2w - 10)
+    }
+}
+
+function drawBackground(dc: CanvasRenderingContext2D, { start, end, t2w, height }: TimeRange) {
     const begin = startTimeOfDay(start),
         [timeSpan, subTimeSpan] = GRIDS.find(([span]) => span * t2w > 200) || GRIDS[GRIDS.length - 1]
     const subTickPos = [ ] as number[][]
@@ -122,34 +135,21 @@ export function drawBackground(dc: CanvasRenderingContext2D, { start, end, t2w, 
         tickPos.push([(time - start) * t2w, 0, height])
     }
     drawVerticalGrids(dc, tickPos, '#666')
-
-    // labels
-    for (let time = begin; time < end; time += timeSpan) {
-        const pos = (time - start) * t2w,
-            date = new Date(time),
-            timeString = [date.getHours(), date.getMinutes()]
-                .map(val => `${val}`.padStart(2, '0')).join(':'),
-            text = timeString === '00:00' ? date.toDateString() + ' ' + timeString : timeString
-        dc.fillText(text, pos + 5, timelineHead - 5, timeSpan * t2w - 10)
-    }
 }
 
 export function drawSpanList(dc: CanvasRenderingContext2D, range: TimeRange, rows: TimelineRow[]) {
     dc.clearRect(0, 0, range.width, range.height)
     dc.save()
-    let prev = 'null'
     for (const { spans: [first], worker } of rows) {
         if (first) {
             dc.fillStyle = getWorkerColor(worker)
             dc.fillRect(0, first.top, range.width, first.height)
         }
-        if (prev !== worker && first) {
-            dc.fillStyle = '#888'
-            dc.fillText((prev = worker) || '<null>', 5, first.top + first.height - 5)
-        }
     }
     dc.restore()
+
     drawBackground(dc, range)
+
     dc.save()
     for (const { spans } of rows) {
         for (const span of spans) {
@@ -161,7 +161,22 @@ export function drawSpanList(dc: CanvasRenderingContext2D, range: TimeRange, row
 
     const now = Date.now()
     dc.save()
-    dc.fillStyle = 'rgba(240, 240, 240, 0.5)'
-    dc.fillRect((now - range.start) * range.t2w, 0, (range.end - Math.min(now, range.start)) * range.t2w, range.height)
+    dc.beginPath()
+    dc.moveTo((now - range.start) * range.t2w, 0)
+    dc.lineTo((now - range.start) * range.t2w, range.height)
+    dc.strokeStyle = 'rgba(255, 128, 128, 0.5)'
+    dc.stroke()
     dc.restore()
+
+    dc.save()
+    let prev = 'null'
+    for (const { spans: [first], worker } of rows) {
+        if (prev !== worker && first) {
+            dc.fillStyle = '#888'
+            dc.fillText((prev = worker) || '<null>', 5, first.top + first.height - 5)
+        }
+    }
+    dc.restore()
+
+    drawLabels(dc, range)
 }

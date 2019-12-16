@@ -15,7 +15,8 @@ export function randint(from: number, to = 0) {
     return Math.floor(Math.random() * (to - from) + from)
 }
 
-export function clamp(x: number, min: number, max: number) {
+export function clamp(x: number, a: number, b: number) {
+    const [min, max] = [Math.min(a, b), Math.max(a, b)]
     return x < min ? min : x > max ? max : x
 }
 

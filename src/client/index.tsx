@@ -67,7 +67,7 @@ function Timeline({ rows }: { rows: TimelineRow[] }) {
 
 function Main() {
     const now = Date.now(),
-        [[start, end, top], setRange] = useState([now - TIME.day * 6, now + TIME.day, 0]),
+        [[start, end, top], setRange] = useState([now - TIME.day, now + TIME.hour, 0]),
         cvRef = useRef<HTMLCanvasElement>(null),
         timelineTop = 40,
         width = window.innerWidth,
@@ -75,10 +75,8 @@ function Main() {
         dpi = window.devicePixelRatio,
         t2w = width / (end - start),
         w2t = 1 / t2w,
-        range = { start, end, top, width, height, t2w, w2t }
-
-    const workflows = useAsyncEffect(rpc.workflow.list, []),
-        pods = useAsyncEffect(rpc.pod.list, []),
+        range = { start, end, top, width, height, t2w, w2t },
+        data = useAsyncEffect(() => Promise.all([rpc.pod.list(), rpc.workflow.list()])),
         [rows, setRows] = useState([] as TimelineRow[]),
         setRowsDebounced = debounce(setRows, 1000),
         [filter, setFilter] = useState('')
@@ -86,7 +84,8 @@ function Main() {
     useEffect(() => {
         const cv = cvRef.current,
             dc = cv && cv.getContext('2d'),
-            rows = clacRows(range, pods.value || [], workflows.value || [], filter)
+            [pods, workflows] = data.value || [[], []],
+            rows = clacRows(range, pods, workflows, filter)
         if (cv && dc) {
             if (!(cv as any).dpiScaled) {
                 (cv as any).dpiScaled = dpi
@@ -95,7 +94,7 @@ function Main() {
             drawSpanList(dc, range, rows)
         }
         setRowsDebounced(rows)
-    }, [start, end, top, workflows.value, pods.value, filter])
+    }, [start, end, top, filter, data.value])
 
     function clampTopVal(top: number) {
         const { spans: [last] } = rows[rows.length - 1] || { spans: [] },
@@ -119,9 +118,8 @@ function Main() {
     }
 
     const onMouseDown = (evt: React.MouseEvent) => withMouseDown(evt as any, (evt, init) => {
-        const delta = (evt.clientX - init.clientX) * w2t,
-            pad = clampTopVal(top + evt.clientY - init.clientY)
-        setRange([start - delta, end - delta, pad])
+        const delta = (evt.clientX - init.clientX) * w2t
+        setRange([start - delta, end - delta, clampTopVal(top + evt.clientY - init.clientY)])
     })
 
     return <>
@@ -129,18 +127,17 @@ function Main() {
             filter: <input value={ filter } onChange={ evt => setFilter(evt.target.value) } />
             <span> </span>
             {
-                (workflows.loading || pods.loading) ?
+                data.loading ?
                 <button disabled={ true }>Refreshing...</button> :
-                <button onClick={ () => (workflows.reload(), pods.reload()) }>Refresh</button>
+                <button onClick={ () => data.reload() }>Refresh</button>
             }
             {
-                (workflows.error || pods.error) &&
-                <span style={{ color: 'red' }}> { (workflows.error || pods.error).message }</span>
+                data.error &&
+                <span style={{ color: 'red' }}> { data.error.message }</span>
             }
         </div>
         <div className="timeline-main" style={{ width, height }}
             onMouseDown={ onMouseDown } onWheel={ onWheel }>
-            <Timeline rows={ rows } />
         </div>
         <canvas className="timeline-bg" style={{ width, height }}
             width={ width * dpi } height={ height * dpi } ref={ cvRef } />
