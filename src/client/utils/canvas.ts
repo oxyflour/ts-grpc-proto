@@ -38,6 +38,7 @@ export const TIME = {
 }
 
 export const GRIDS = [
+    [TIME.minute *  5, TIME.minute],
     [TIME.minute * 10, TIME.minute * 2],
     [TIME.minute * 30, TIME.minute * 5],
     [TIME.hour,        TIME.minute * 10],
@@ -47,10 +48,11 @@ export const GRIDS = [
     [TIME.day,         TIME.hour * 4],
 ]
 
+let workerIndex = 0
 const getFlowColor = memo((_: number) => `hsl(${randint(360)}, 76%, 69%)`),
-    getWorkerColor = memo((_: string) => `hsl(${randint(360)}, 100%, 95%)`)
+    getWorkerColor = memo((_: string) => (workerIndex ++) % 2 ? '#eee' : '#fff')
 
-export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[]) {
+export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[], filter: string) {
     const workers = { } as { [name: string]: string }
     for (const pod of pods) {
         workers[pod.metadata.name] = pod.spec.nodeName || ''
@@ -60,7 +62,7 @@ export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[]) {
     for (const [index, flow] of flows.entries()) {
         for (const [name, node] of Object.entries(flow.status.nodes)) {
             if (node.type === 'Pod' && node.startedAt) {
-                const worker = workers[node.name] || '',
+                const worker = workers[node.id] || '',
                     start = new Date(node.startedAt).getTime(),
                     end = node.finishedAt ? new Date(node.finishedAt).getTime() : range.end,
                     spans = rows.find(item => item.worker === worker &&
@@ -77,14 +79,21 @@ export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[]) {
 
     let spanStartHeight = timelineHead
     const sorted = rows.sort((a, b) => a.worker.localeCompare(b.worker))
-    for (const { spans } of sorted) {
+
+    let filtered = sorted
+    if (filter) {
+        const re = new RegExp(filter)
+        filtered = sorted.filter(item => re.test(item.worker))
+    }
+
+    for (const { spans } of filtered) {
         for (const span of spans) {
             span.top = spanStartHeight
             span.height = timelineSpanHeight
         }
         spanStartHeight += timelineSpanHeight
     }
-    return rows
+    return filtered
 }
 
 function drawVerticalGrids(dc: CanvasRenderingContext2D, positions: number[][], style: string) {
@@ -99,13 +108,7 @@ function drawVerticalGrids(dc: CanvasRenderingContext2D, positions: number[][], 
     dc.restore()
 }
 
-export function drawBackground(dc: CanvasRenderingContext2D, { start, end, t2w, width, height }: TimeRange) {
-    const now = Date.now()
-    dc.save()
-    dc.fillStyle = 'rgba(240, 240, 240, 0.5)'
-    dc.fillRect((now - start) * t2w, 0, (end - Math.min(now, start)) * t2w, height)
-    dc.restore()
-
+export function drawBackground(dc: CanvasRenderingContext2D, { start, end, t2w, height }: TimeRange) {
     // background
     const begin = startTimeOfDay(start),
         [timeSpan, subTimeSpan] = GRIDS.find(([span]) => span * t2w > 200) || GRIDS[GRIDS.length - 1]
@@ -154,5 +157,11 @@ export function drawSpanList(dc: CanvasRenderingContext2D, range: TimeRange, row
             dc.fillRect(span.left + 1, span.top + 1, span.width - 2, span.height - 2)
         }
     }
+    dc.restore()
+
+    const now = Date.now()
+    dc.save()
+    dc.fillStyle = 'rgba(240, 240, 240, 0.5)'
+    dc.fillRect((now - range.start) * range.t2w, 0, (range.end - Math.min(now, range.start)) * range.t2w, range.height)
     dc.restore()
 }

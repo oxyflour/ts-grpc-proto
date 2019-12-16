@@ -8,7 +8,7 @@ const crd = config.makeApiClient(CustomObjectsApi),
 
 const group = 'argoproj.io',
     version = 'v1alpha1',
-    namespace = 'default',
+    namespace = 'hmr',
     plural = 'workflows'
 
 export interface Pod {
@@ -50,6 +50,7 @@ export interface FlowNode {
     name: string
     phase: string
     type: string
+    id: string
 }
 
 export interface Workflow {
@@ -85,8 +86,7 @@ export default {
     },
     workflow: {
         async list() {
-            const { body } = await crd.listNamespacedCustomObject(
-                group, version, namespace, plural) as { body: { items: Workflow[] } }
+            const { body } = await crd.listNamespacedCustomObject(group, version, namespace, plural) as { body: { items: Workflow[] } }
             return body.items
         }
     },

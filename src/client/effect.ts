@@ -3,7 +3,8 @@ import { DependencyList, useState, useEffect, Reducer } from 'react'
 export function useAsyncEffect<V>(fn: () => Promise<V>, val?: DependencyList) {
     const [value, setValue] = useState<V>(),
         [loading, setLoading] = useState(false),
-        [error, setError] = useState()
+        [error, setError] = useState(),
+        [lastUpdate, setLastUpdate] = useState(0)
     async function run() {
         setLoading(true)
         setError(null)
@@ -15,8 +16,11 @@ export function useAsyncEffect<V>(fn: () => Promise<V>, val?: DependencyList) {
         }
         setLoading(false)
     }
-    useEffect(() => { run() }, val)
-    return { value, loading, error }
+    function reload() {
+        setLastUpdate(Date.now())
+    }
+    useEffect(() => { run() }, (val || []).concat(lastUpdate))
+    return { value, loading, error, reload }
 }
 
 let actionId = 0

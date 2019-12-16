@@ -11,7 +11,7 @@ import { debounce } from '../common/utils'
 import './index.less'
 import { calcSpanList as clacRows, drawSpanList, TIME, TimelineRow } from './utils/canvas'
 
-const rpc = buildRPC('https://dev.yff.me:8443')
+const rpc = buildRPC('https://dev.emsim.rnd.huawei.com:8443')
 
 const builder = buildRedux({ log: [] as string[] }),
     Reset = builder.action(() => ({ }), state => ({ ...state, log: [] })),
@@ -35,16 +35,25 @@ function Logger() {
     </div>
 }
 
+function Duration({ from, to }: { from: string, to: string }) {
+    const time = new Date(to).getTime() - new Date(from).getTime()
+    return <span>{ Math.floor(time / TIME.minute) } min</span>
+}
+
 function Timeline({ rows }: { rows: TimelineRow[] }) {
     const id = useId('flow')
     return <div>
     {
         rows.map(item => item.spans).flat()
-            .map(({ left, top, width, height, name, node }, index) => <TooltipHost key={ index }
+            .map(({ left, top, width, height, node }, index) => <TooltipHost key={ index }
                 content={
                     <>
-                        <b>Name</b>: { name }<br />
-                        <b>Phase</b>: { node.phase }
+                        <b>Name</b>: { node.name }<br />
+                        <b>Phase</b>: { node.phase }<br />
+                        {
+                            node.startedAt && node.finishedAt &&
+                            <span><b>Time</b>: <Duration from={ node.startedAt } to={ node.finishedAt } /></span>
+                        }
                     </>
                 }
                 calloutProps={{ target: `#${id}-${index}` }}>
@@ -58,7 +67,7 @@ function Timeline({ rows }: { rows: TimelineRow[] }) {
 
 function Main() {
     const now = Date.now(),
-        [[start, end], setRange] = useState([now - TIME.week, now + TIME.day]),
+        [[start, end], setRange] = useState([now - TIME.day * 6, now + TIME.day]),
         cvRef = useRef<HTMLCanvasElement>(null),
         timelineTop = 40,
         width = window.innerWidth,
@@ -71,12 +80,13 @@ function Main() {
     const workflows = useAsyncEffect(rpc.workflow.list, []),
         pods = useAsyncEffect(rpc.pod.list, []),
         [rows, setRows] = useState([] as TimelineRow[]),
-        setRowsDebounced = debounce(setRows, 1000)
+        setRowsDebounced = debounce(setRows, 1000),
+        [filter, setFilter] = useState('')
 
     useEffect(() => {
         const cv = cvRef.current,
             dc = cv && cv.getContext('2d'),
-            rows = clacRows(range, pods.value || [], workflows.value || [])
+            rows = clacRows(range, pods.value || [], workflows.value || [], filter)
         if (cv && dc) {
             if (!(cv as any).dpiScaled) {
                 (cv as any).dpiScaled = dpi
@@ -85,17 +95,17 @@ function Main() {
             drawSpanList(dc, range, rows)
         }
         setRowsDebounced(rows)
-    }, [start, end, workflows.value, pods.value])
+    }, [start, end, workflows.value, pods.value, filter])
 
     function onWheel(evt: React.WheelEvent) {
         const cv = cvRef.current
         if (cv) {
             const { left, right, width } = cv.getBoundingClientRect(),
-                delta = (end - start) * evt.deltaY * 0.01,
+                delta = (end - start) * evt.deltaY * 0.001,
                 f1 = (evt.clientX - left) / width,
                 f2 = (right - evt.clientX) / width,
                 val = end - start + delta
-            if (val > 30 * TIME.minute && val < TIME.week) {
+            if (val > 10 * TIME.minute && val < TIME.week) {
                 setRange([start - delta * f1, end + delta * f2])
             }
         }
@@ -108,15 +118,17 @@ function Main() {
 
     return <>
         <div style={{ height: timelineTop, lineHeight: `${timelineTop}px` }}>
-            uvw
+            filter: <input value={ filter } onChange={ evt => setFilter(evt.target.value) } />
+            <span> </span>
+            <button onClick={ () => (workflows.reload(), pods.reload()) }>Refresh</button>
         </div>
         <div className="timeline-main" style={{ width, height }}
             onMouseDown={ onMouseDown } onWheel={ onWheel }>
             {
-                workflows.loading ?
+                workflows.loading || pods.loading ?
                     <div>loading...</div> :
-                workflows.error ?
-                    <div>error: { workflows.error.message }</div> :
+                workflows.error || pods.error ?
+                    <div>error: { (workflows.error || pods.error).message }</div> :
                     null
             }
             <Timeline rows={ rows } />
