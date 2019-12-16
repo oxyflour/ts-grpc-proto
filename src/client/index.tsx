@@ -6,7 +6,7 @@ import { useId } from '@uifabric/react-hooks'
 
 import buildRPC from './rpc'
 import { useAsyncEffect, buildRedux, withMouseDown } from './effect'
-import { debounce } from '../common/utils'
+import { debounce, clamp } from '../common/utils'
 
 import './index.less'
 import { calcSpanList as clacRows, drawSpanList, TIME, TimelineRow } from './utils/canvas'
@@ -67,7 +67,7 @@ function Timeline({ rows }: { rows: TimelineRow[] }) {
 
 function Main() {
     const now = Date.now(),
-        [[start, end], setRange] = useState([now - TIME.day * 6, now + TIME.day]),
+        [[start, end, top], setRange] = useState([now - TIME.day * 6, now + TIME.day, 0]),
         cvRef = useRef<HTMLCanvasElement>(null),
         timelineTop = 40,
         width = window.innerWidth,
@@ -75,7 +75,7 @@ function Main() {
         dpi = window.devicePixelRatio,
         t2w = width / (end - start),
         w2t = 1 / t2w,
-        range = { start, end, width, height, t2w, w2t }
+        range = { start, end, top, width, height, t2w, w2t }
 
     const workflows = useAsyncEffect(rpc.workflow.list, []),
         pods = useAsyncEffect(rpc.pod.list, []),
@@ -95,7 +95,14 @@ function Main() {
             drawSpanList(dc, range, rows)
         }
         setRowsDebounced(rows)
-    }, [start, end, workflows.value, pods.value, filter])
+    }, [start, end, top, workflows.value, pods.value, filter])
+
+    function clampTopVal(top: number) {
+        const { spans: [last] } = rows[rows.length - 1] || { spans: [] },
+            { spans: [first] } = rows[0] || { spans: [] },
+            contentHeight = last && first ? last.top + last.height - first.top : 0
+        return clamp(top, range.height - contentHeight, 0)
+    }
 
     function onWheel(evt: React.WheelEvent) {
         const cv = cvRef.current
@@ -106,14 +113,15 @@ function Main() {
                 f2 = (right - evt.clientX) / width,
                 val = end - start + delta
             if (val > 10 * TIME.minute && val < TIME.week) {
-                setRange([start - delta * f1, end + delta * f2])
+                setRange([start - delta * f1, end + delta * f2, top])
             }
         }
     }
 
     const onMouseDown = (evt: React.MouseEvent) => withMouseDown(evt as any, (evt, init) => {
-        const delta = (evt.clientX - init.clientX) * w2t
-        setRange([start - delta, end - delta])
+        const delta = (evt.clientX - init.clientX) * w2t,
+            pad = clampTopVal(top + evt.clientY - init.clientY)
+        setRange([start - delta, end - delta, pad])
     })
 
     return <>

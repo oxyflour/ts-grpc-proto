@@ -4,6 +4,7 @@ import { startTimeOfDay, randint, memo } from '../../common/utils'
 export interface TimeRange {
     start: number
     end: number
+    top: number
     width: number
     height: number
     t2w: number
@@ -77,23 +78,22 @@ export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[], f
         }
     }
 
-    let spanStartHeight = timelineHead
-    const sorted = rows.sort((a, b) => a.worker.localeCompare(b.worker))
-
-    let filtered = sorted
+    let spanStartHeight = timelineHead + range.top
+    rows.sort((a, b) => a.worker.localeCompare(b.worker))
     if (filter) {
-        const re = new RegExp(filter)
-        filtered = sorted.filter(item => re.test(item.worker))
+        const re = new RegExp(filter),
+            filtered = rows.filter(item => re.test(item.worker))
+        rows.length = 0
+        rows.push.apply(rows, filtered)
     }
-
-    for (const { spans } of filtered) {
+    for (const { spans } of rows) {
         for (const span of spans) {
             span.top = spanStartHeight
             span.height = timelineSpanHeight
         }
         spanStartHeight += timelineSpanHeight
     }
-    return filtered
+    return rows
 }
 
 function drawVerticalGrids(dc: CanvasRenderingContext2D, positions: number[][], style: string) {
