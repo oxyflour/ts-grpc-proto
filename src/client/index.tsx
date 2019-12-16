@@ -120,17 +120,18 @@ function Main() {
         <div style={{ height: timelineTop, lineHeight: `${timelineTop}px` }}>
             filter: <input value={ filter } onChange={ evt => setFilter(evt.target.value) } />
             <span> </span>
-            <button onClick={ () => (workflows.reload(), pods.reload()) }>Refresh</button>
+            {
+                (workflows.loading || pods.loading) ?
+                <button disabled={ true }>Refreshing...</button> :
+                <button onClick={ () => (workflows.reload(), pods.reload()) }>Refresh</button>
+            }
+            {
+                (workflows.error || pods.error) &&
+                <span style={{ color: 'red' }}> { (workflows.error || pods.error).message }</span>
+            }
         </div>
         <div className="timeline-main" style={{ width, height }}
             onMouseDown={ onMouseDown } onWheel={ onWheel }>
-            {
-                workflows.loading || pods.loading ?
-                    <div>loading...</div> :
-                workflows.error || pods.error ?
-                    <div>error: { (workflows.error || pods.error).message }</div> :
-                    null
-            }
             <Timeline rows={ rows } />
         </div>
         <canvas className="timeline-bg" style={{ width, height }}
