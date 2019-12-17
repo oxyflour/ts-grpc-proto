@@ -141,8 +141,10 @@ export function drawSpanList(dc: CanvasRenderingContext2D, range: TimeRange, row
                 prevWorker = worker
                 prevWorkerBg = prevWorkerBg === '#eee' ? '#fff' : '#eee'
             }
-            dc.fillStyle = prevWorkerBg
-            dc.fillRect(0, first.top, range.width, first.height)
+            if (first.top < range.height && first.top + first.height > 0) {
+                dc.fillStyle = prevWorkerBg
+                dc.fillRect(0, first.top, range.width, first.height)
+            }
         }
     }
     dc.restore()
@@ -152,8 +154,10 @@ export function drawSpanList(dc: CanvasRenderingContext2D, range: TimeRange, row
     dc.save()
     for (const { spans } of rows) {
         for (const { left, width, top, height, index } of spans) {
-            dc.fillStyle = getFlowColor(index)
-            dc.fillRect(left + 1, top + 1, width - 2, height - 2)
+            if (top < range.height && top + height > 0) {
+                dc.fillStyle = getFlowColor(index)
+                dc.fillRect(left + 1, top + 1, width - 2, height - 2)
+            }
         }
     }
     dc.restore()
