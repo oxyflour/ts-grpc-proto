@@ -49,9 +49,7 @@ export const GRIDS = [
     [TIME.day,         TIME.hour * 4],
 ]
 
-let workerIndex = 0
-const getFlowColor = memo((_: number) => `hsl(${randint(360)}, 76%, 69%)`),
-    getWorkerColor = memo((_: string) => (workerIndex ++) % 2 ? '#eee' : '#fff')
+const getFlowColor = memo((_: number) => `hsl(${randint(360)}, 76%, 69%)`)
 
 export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[], filter: string) {
     const workers = { } as { [name: string]: string }
@@ -60,10 +58,11 @@ export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[], f
     }
 
     const rows = [ ] as TimelineRow[],
-        now = Date.now()
+        now = Date.now(),
+        re = filter && new RegExp(filter)
     for (const [index, flow] of flows.entries()) {
         for (const [name, node] of Object.entries(flow.status.nodes)) {
-            if (node.type === 'Pod' && node.startedAt) {
+            if (node.type === 'Pod' && node.startedAt && (!re || re.test(node.name))) {
                 const worker = workers[node.id] || '',
                     start = new Date(node.startedAt).getTime(),
                     end = node.finishedAt ? new Date(node.finishedAt).getTime() : now + 20 * range.w2t,
@@ -81,12 +80,6 @@ export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[], f
 
     let spanStartHeight = timelineHead + range.top
     rows.sort((a, b) => a.worker.localeCompare(b.worker))
-    if (filter) {
-        const re = new RegExp(filter),
-            filtered = rows.filter(item => re.test(item.worker))
-        rows.length = 0
-        rows.push.apply(rows, filtered)
-    }
     for (const { spans } of rows) {
         for (const span of spans) {
             span.top = spanStartHeight
@@ -140,9 +133,15 @@ function drawBackground(dc: CanvasRenderingContext2D, { start, end, t2w, height 
 export function drawSpanList(dc: CanvasRenderingContext2D, range: TimeRange, rows: TimelineRow[]) {
     dc.clearRect(0, 0, range.width, range.height)
     dc.save()
+    let prevWorker = 'null',
+        prevWorkerBg = '#eee'
     for (const { spans: [first], worker } of rows) {
         if (first) {
-            dc.fillStyle = getWorkerColor(worker)
+            if (prevWorker !== worker) {
+                prevWorker = worker
+                prevWorkerBg = prevWorkerBg === '#eee' ? '#fff' : '#eee'
+            }
+            dc.fillStyle = prevWorkerBg
             dc.fillRect(0, first.top, range.width, first.height)
         }
     }
@@ -152,9 +151,9 @@ export function drawSpanList(dc: CanvasRenderingContext2D, range: TimeRange, row
 
     dc.save()
     for (const { spans } of rows) {
-        for (const span of spans) {
-            dc.fillStyle = getFlowColor(span.index)
-            dc.fillRect(span.left + 1, span.top + 1, span.width - 2, span.height - 2)
+        for (const { left, width, top, height, index } of spans) {
+            dc.fillStyle = getFlowColor(index)
+            dc.fillRect(left + 1, top + 1, width - 2, height - 2)
         }
     }
     dc.restore()
@@ -173,7 +172,7 @@ export function drawSpanList(dc: CanvasRenderingContext2D, range: TimeRange, row
     for (const { spans: [first], worker } of rows) {
         if (prev !== worker && first) {
             dc.fillStyle = '#888'
-            dc.fillText((prev = worker) || '<null>', 5, first.top + first.height - 5)
+            dc.fillText((prev = worker) || '<Pending>', 5, first.top + first.height - 5)
         }
     }
     dc.restore()
