@@ -51,6 +51,20 @@ export const GRIDS = [
 
 const getFlowColor = memo((_: number) => `hsl(${randint(360)}, 76%, 69%)`)
 
+class RegExpSafe {
+    readonly re = null as RegExp | null
+    constructor(pattern: string) {
+        try {
+            this.re = new RegExp(pattern)
+        } catch (err) {
+            // ignore
+        }
+    }
+    test(str: string) {
+        return this.re ? this.re.test(str) : true
+    }
+}
+
 export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[], filter: string) {
     const workers = { } as { [name: string]: string }
     for (const pod of pods) {
@@ -59,7 +73,7 @@ export function calcSpanList(range: TimeRange, pods: Pod[], flows: Workflow[], f
 
     const rows = [ ] as TimelineRow[],
         now = Date.now(),
-        re = filter && new RegExp(filter)
+        re = filter && new RegExpSafe(filter)
     for (const [index, flow] of flows.entries()) {
         for (const [name, node] of Object.entries(flow.status.nodes)) {
             if (node.type === 'Pod' && node.startedAt && (!re || re.test(node.name))) {

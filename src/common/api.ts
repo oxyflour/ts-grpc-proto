@@ -55,14 +55,12 @@ export interface FlowNode {
 
 export interface Workflow {
     metadata: {
-        creationTimestamp: string
         name: string
-        namespace: string
         uid: string
     }
     spec: {
         entrypoint: string
-        templates: Template[]
+        // templates: Template[]
     }
     status: {
         startedAt: string

@@ -19,13 +19,6 @@ body {
     border: 1px solid #888;
 }
 
-.tooltip {
-    font-size: 60%;
-    position: absolute;
-    margin-left: -10px;
-    margin-top: 5px;
-    filter: drop-shadow(2px 4px 6px black);
-}
 
 .tooltip-content {
     padding: 10px;
@@ -33,12 +26,33 @@ body {
     border-radius: 5px;
 }
 
+.tooltip {
+    font-size: 60%;
+    position: absolute;
+    margin-left: -10px;
+    filter: drop-shadow(2px 4px 6px black);
+}
+
 .tooltip::before {
     content: " ";
-    position: absolute;
-    top: -10px;
     left: 5px;
+    position: absolute;
     border-width: 5px;
     border-style: solid;
+}
+
+.tooltip.down {
+    padding-top: 5px;
+}
+.tooltip.down::before {
+    top: -5px;
     border-color: transparent transparent white transparent;
+}
+
+.tooltip.up {
+    padding-bottom: 5px;
+}
+.tooltip.up::before {
+    bottom: -5px;
+    border-color: white transparent transparent  transparent;
 }
